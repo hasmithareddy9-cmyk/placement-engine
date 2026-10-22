@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>PlaceFlow</title>
+<style>
+:root{--bg:#0f1226;--card:#191d3a;--ink:#e8eaff;--mut:#9aa0c8;--a:#7c5cff;--g:#2ee6a6;--r:#ff6b81}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 24px;border-bottom:1px solid #2a2f5a}
+h1{font-size:20px;margin:0;background:linear-gradient(90deg,var(--a),var(--g));-webkit-background-clip:text;color:transparent}
+main{max-width:1100px;margin:auto;padding:20px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.card{background:var(--card);border-radius:14px;padding:16px;margin-bottom:14px}.stat b{font-size:28px;display:block}.mut{color:var(--mut);font-size:13px}
+input,select,textarea,button{font:inherit;padding:9px 12px;border-radius:9px;border:1px solid #333a70;background:#10132b;color:var(--ink);width:100%;margin:4px 0}
+button{background:var(--a);border:0;cursor:pointer;width:auto;font-weight:600}button.sec{background:#2a2f5a}
+.pill{padding:2px 10px;border-radius:99px;font-size:12px;background:#2a2f5a}.sent{background:#124d3b;color:var(--g)}.failed{background:#55202b;color:var(--r)}.pending{background:#4d4412;color:#ffd866}
+.bar{height:8px;background:#2a2f5a;border-radius:9px;overflow:hidden}.bar i{display:block;height:100%;background:linear-gradient(90deg,var(--a),var(--g))}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:8px;border-bottom:1px solid #2a2f5a;text-align:left;vertical-align:top}
+.hero{text-align:center;padding:50px 10px}.hero h2{font-size:34px;margin:0 0 10px}a{color:var(--g)}.err{color:var(--r)}
+</style></head><body>
+<header><h1>PlaceFlow · Automated Campus Placement</h1><div id="who"></div></header><main id="app"></main>
+<script>
+const $=s=>document.querySelector(s),esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let T=localStorage.t,ROLE=localStorage.r;
+const api=async(p,m='GET',b)=>{const r=await fetch('/api/'+p,{method:m,headers:{'Content-Type':'application/json',Authorization:'Bearer '+T},body:b?JSON.stringify(b):undefined});const d=await r.json();if(!r.ok)throw new Error(d.error||'Error');return d;};
+const pill=s=>`<span class="pill ${s}">${s}</span>`;
+function landing(){$('#who').innerHTML='';$('#app').innerHTML=`<div class="hero"><h2>Jobs find students. Shortlists find recruiters.</h2><p class="mut">Add a job → eligibility check → explainable match → opt-in email alerts → consent-only recruiter shortlist. Automatically.</p></div>
+<div class="grid"><div class="card"><h3>Login</h3><input id="e" placeholder="Email"><input id="p" type="password" placeholder="Password"><button onclick="login()">Login</button> <p id="m" class="err"></p>
+<p class="mut">Demo: admin@campus.test / admin123<br>recruiter@acme.test / recruit123<br>meena@example.test / student123</p></div>
+<div class="card"><h3>Student registration</h3><input id="rn" placeholder="Name"><input id="re" placeholder="Email"><input id="rp" type="password" placeholder="Password (6+)"><button onclick="reg()">Register</button><p id="rm" class="err"></p></div></div>`;}
+async function login(){try{const d=await api('login','POST',{email:$('#e').value,password:$('#p').value});localStorage.t=T=d.token;localStorage.r=ROLE=d.role;boot();}catch(e){$('#m').textContent=e.message}}
+async function reg(){try{await api('register','POST',{name:$('#rn').value,email:$('#re').value,password:$('#rp').value});$('#rm').textContent='Registered! Login above.'}catch(e){$('#rm').textContent=e.message}}
+function out(){localStorage.clear();T=ROLE=null;landing();}
+async function boot(){if(!T)return landing();$('#who').innerHTML=`${ROLE} <button class="sec" onclick="out()">Logout</button>`;try{await({student,recruiter,admin}[ROLE])();}catch(e){out()}}
+async function student(){const d=await api('student'),s=d.student;
+$('#app').innerHTML=`<div class="grid"><div class="card stat"><span class="mut">Profile completeness</span><b>${d.completeness}%</b><div class="bar"><i style="width:${d.completeness}%"></i></div></div><div class="card stat"><span class="mut">Matched jobs</span><b>${d.matches.length}</b></div><div class="card stat"><span class="mut">Alerts received</span><b>${d.emails.filter(e=>e.status==='sent').length}</b></div></div>
+<h3>Recommended jobs <span class="mut">(AI fit estimate – not a guarantee)</span></h3><input id="q" placeholder="Search jobs..." oninput="draw()"><div id="jobs"></div>
+<div class="grid"><div class="card"><h3>Profile & consent</h3><input id="n" value="${esc(s.name)}"><select id="br">${['CSE','IT','ECE','EEE','MECH'].map(b=>`<option ${b===s.branch?'selected':''}>${b}</option>`).join('')}</select><input id="gy" type="number" value="${s.gradYear}"><input id="cg" type="number" step="0.1" value="${s.cgpa}" placeholder="CGPA">
+<input id="sk" value="${esc(s.skills.join(', '))}" placeholder="Skills"><input id="lo" value="${esc(s.locations.join(', '))}" placeholder="Preferred locations"><input id="in" value="${esc(s.interests.join(', '))}" placeholder="Interests"><input id="pr" value="${esc(s.projects.join(', '))}" placeholder="Projects (comma separated)"><input id="po" value="${esc(s.portfolio)}" placeholder="Portfolio URL"><textarea id="rt" placeholder="Paste resume text to auto-extract skills"></textarea>
+<label><input type="checkbox" id="c1" style="width:auto" ${s.consent.alerts?'checked':''}> Email me job alerts</label><label><input type="checkbox" id="c2" style="width:auto" ${s.consent.share?'checked':''}> Share name, education, skills, projects & portfolio with recruiters (never email/phone)</label><button onclick="saveP()">Save</button> <span id="sm"></span></div>
+<div class="card"><h3>Email history</h3>${d.emails.map(e=>`<p>${pill(e.status)} ${esc(e.subject)} ${e.preview?`<a href="${esc(e.preview)}" target=_blank>preview</a>`:''}</p>`).join('')||'<p class="mut">No emails yet.</p>'}</div></div>`;
+window.M=d.matches;draw();}
+function draw(){const q=($('#q').value||'').toLowerCase();$('#jobs').innerHTML=M.filter(x=>(x.job.title+x.job.company).toLowerCase().includes(q)).map(x=>`<div class="card"><b>${esc(x.job.title)}</b> · ${esc(x.job.company)} · ${esc(x.job.location)} ${x.job.sample?'<span class="pill">sample data</span>':''}<div class="bar"><i style="width:${x.score}%"></i></div><b>${x.score}% match</b><p class="mut">${esc(x.explanation)}</p><p>Missing: ${x.missing.map(esc).join(', ')||'none'} ${x.resources.length?'<br><span class=mut>Learn: '+x.resources.map(esc).join(' · ')+'</span>':''}</p><a href="${esc(x.job.url)}" target=_blank>Apply (official link)</a> · deadline ${esc(x.job.deadline)}</div>`).join('')||'<p class="mut">No eligible jobs yet.</p>';}
+async function saveP(){try{await api('student','PUT',{name:$('#n').value,branch:$('#br').value,gradYear:$('#gy').value,cgpa:$('#cg').value,skills:$('#sk').value,locations:$('#lo').value,interests:$('#in').value,projects:$('#pr').value,portfolio:$('#po').value,resumeText:$('#rt').value,consent:{alerts:$('#c1').checked,share:$('#c2').checked}});$('#sm').textContent='Saved – matches recalculating';setTimeout(student,1500);}catch(e){$('#sm').innerHTML='<span class=err>'+esc(e.message)+'</span>'}}
+async function recruiter(){const d=await api('recruiter');
+$('#app').innerHTML=`<div class="card"><h3>Create vacancy</h3><div class="grid"><input id="jt" placeholder="Title"><input id="jl" placeholder="Location"><input id="js" placeholder="Skills (comma)"><input id="jc" type="number" step="0.1" placeholder="Min CGPA"><input id="jb" placeholder="Branches e.g. CSE,IT"><input id="jd" type="date"><input id="ju" placeholder="Application URL (https://...)"></div><button onclick="addJ()">Publish & auto-match</button> <span id="jm" class="err"></span></div>`+
+d.map(x=>`<div class="card"><b>${esc(x.job.title)}</b> ${pill(x.job.status)}<p class="mut">Consent-approved shortlist (${x.shortlist.length}) · recruiter emails: ${x.emails.map(e=>pill(e.status)).join(' ')||'none yet'}</p><table><tr><th>Name</th><th>Education</th><th>Skills</th><th>Projects</th><th>Portfolio</th><th>Fit</th></tr>${x.shortlist.map(c=>`<tr><td>${esc(c.name)}</td><td>${esc(c.branch)} ${c.cgpa} (${c.gradYear})</td><td>${esc(c.skills.join(', '))}</td><td>${esc(c.projects.join('; '))}</td><td><a href="${esc(c.portfolio)}" target=_blank>link</a></td><td>${c.score}%</td></tr>`).join('')}</table></div>`).join('');}
+async function addJ(){try{await api('jobs','POST',{title:$('#jt').value,location:$('#jl').value,skills:$('#js').value,minCgpa:$('#jc').value,branches:$('#jb').value,deadline:$('#jd').value,url:$('#ju').value});setTimeout(recruiter,2500);$('#jm').textContent='Published. Refreshing…'}catch(e){$('#jm').textContent=e.message}}
+async function admin(){const d=await api('admin'),S=d.stats;
+$('#app').innerHTML=`<div class="card"><b>Automation: ${d.paused?'⏸ PAUSED':'▶ RUNNING'}</b> <button onclick="pa(${!d.paused})">${d.paused?'Resume':'Pause'}</button> <button class="sec" onclick="ing()">Run job discovery (sample feed)</button> <button class="sec" onclick="admin()">Refresh</button></div>
+<div class="grid">${Object.entries(S).map(([k,v])=>`<div class="card stat"><span class="mut">${k}</span><b>${v}</b></div>`).join('')}</div>
+<div class="card"><h3>Email delivery</h3><div class="bar"><i style="width:${S.sent+S.failed?100*S.sent/(S.sent+S.failed):0}%"></i></div><p class="mut">${S.sent} sent / ${S.failed} failed</p></div>
+<div class="grid"><div class="card"><h3>Audit log</h3>${d.logs.map(l=>`<p class="${l.ok?'':'err'}"><span class="mut">${l.at.slice(11,19)}</span> [${l.type}] ${esc(l.msg)}</p>`).join('')}</div>
+<div class="card"><h3>Emails</h3>${d.emails.map(e=>`<p>${pill(e.status)} ${e.kind} · ${esc(e.subject)} ${e.error?'<span class=err>'+esc(e.error)+'</span>':''} ${e.preview?`<a href="${esc(e.preview)}" target=_blank>view</a>`:''}</p>`).join('')}</div></div>
+<div class="card"><h3>Jobs</h3><table>${d.jobs.map(j=>`<tr><td>${esc(j.title)}</td><td>${esc(j.company)}</td><td>${pill(j.status)}</td><td>${j.sample?'sample':'live/manual'}</td></tr>`).join('')}</table></div>`;}
+const pa=async p=>{await api('admin/pause','POST',{paused:p});admin()},ing=async()=>{await api('admin/ingest','POST');setTimeout(admin,3000)};
+boot();
+</script></body></html>
